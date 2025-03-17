@@ -9,60 +9,34 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: ResponsiveScreen(),
-    );
-  }
-}
+      home: Scaffold(
+        appBar: AppBar(title: Text("22100035 - Edwin Theonardi")),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            bool isLargeScreen = constraints.maxWidth > 600;
 
-class ResponsiveScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text("22100035 - P3 - PALP")),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          double width = constraints.maxWidth;
-          bool isLargeScreen = width > 600;
-
-          return Padding(
-            padding: EdgeInsets.all(16.0),
-            child: isLargeScreen ? buildGridLayout() : buildListLayout(),
-          );
-        },
+            return isLargeScreen
+                ? GridView.count(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    padding: EdgeInsets.all(16),
+                    children: List.generate(6, (index) => buildBox(index)),
+                  )
+                : ListView(
+                    padding: EdgeInsets.all(16),
+                    children: List.generate(6, (index) => buildBox(index)),
+                  );
+          },
+        ),
       ),
     );
   }
 
-  Widget buildGridLayout() {
-    return GridView.builder(
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: 6,
-      itemBuilder: (context, index) {
-        return buildBox(index, isLargeScreen: true);
-      },
-    );
-  }
-
-  Widget buildListLayout() {
-    return ListView.builder(
-      itemCount: 6,
-      itemBuilder: (context, index) {
-        return Padding(
-          padding: EdgeInsets.symmetric(vertical: 5),
-          child: buildBox(index, isLargeScreen: false),
-        );
-      },
-    );
-  }
-
-  Widget buildBox(int index, {required bool isLargeScreen}) {
-    double height = isLargeScreen ? (index % 2 == 0 ? 80 : 120) : 100;
+  Widget buildBox(int index) {
     return Container(
-      height: height,
+      height: 100,
+      margin: EdgeInsets.symmetric(vertical: 5),
       decoration: BoxDecoration(
         color: Colors.blueAccent,
         borderRadius: BorderRadius.circular(10),
