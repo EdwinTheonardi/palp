@@ -11,23 +11,23 @@ Langkah selanjutnya adalah membuat file model **Product** sebagai wakil untuk ta
 
 ### Controller
 Selanjutnya, isi *Controller* dengan method-method *RESTful API*.
-**1. index()**
+**1. index()**<br>
 ![index](./images/controller-index.png)<br>
 Dengan method ini kita akan mengambil dan menampilkan semua kolom yang ada di database. Untuk index() kita menggunakan metode GET.
 
-**2. show()**
+**2. show()**<br>
 ![show](./images/controller-show.png)<br>
 Method show() ini kita gunakan untuk mengambil satu produk berdasarkan id. Untuk show() kita menggunakan metode GET.
 
-**3. store()**
+**3. store()**<br>
 ![store](./images/controller-store.png)<br>
 Method store() ini berguna untuk menambahkan produk baru ke dalam database. Sebelum menambahkan data, akan dilakukan validasi terhadap data terlebih dahulu menggunakan validate. Jika semua data adalah valid, maka data akan ditambahkan. Ketika data berhasil ditambahkan, maka akan mengembalikan pesan berupa JSON yang berisi *Produk berhasil ditambahkan*, dan jika gagal maka tetap akan mengirim pesan *Produk gagal ditambahkan*. Untuk store() kita menggunakan metode POST.
 
-**4. update()**
+**4. update()**<br>
 ![update](./images/controller-update.png)<br>
 Method store() ini berguna untuk memperbarui data produk. Pertama kita akan membuat variabel $product yang berisi id dari produk yang ingin kita ubah. Jika id tidak ditemukan maka akan mengembalikan pesan berupa JSON yang isinya adalah *Produk tidak ditemukan*. Jika id ditemukan maka akan lanjut ke proses validasi. Validasi akan dilakukan hanya jika data dikirim (sometimes). Setelah itu, data diupdate menggunakan method update(). Ketika data berhasil diupdate, maka akan dikembalikan pesan *Produk berhasil diupdate*. Untuk update() kita menggunakan metode PUT.
 
-**5. destroy()**
+**5. destroy()**<br>
 ![destroy](./images/controller-destroy.png)<br>
 Sama seperti ketika kita melakukan update, pertama-tama kita ambil dulu id dari produk yang ingin kita hapus. Jika id tidak ditemukan, maka akan mengembalikan pesan *Produk tidak ditemukan*. Jika id ditemukan, maka akan menjalankan delete() untuk menghapus data. Ketika data berhasil di hapus, maka akan mengembalikan pesan *Produk berhasil dihapus*. Untuk destroy() kita menggunakan metode DELETE.
 
