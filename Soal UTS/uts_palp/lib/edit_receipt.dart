@@ -127,105 +127,145 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
               padding: const EdgeInsets.all(16),
               child: Form(
                 key: _formKey,
-                child: ListView(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextFormField(
-                      controller: _formNumberController,
-                      decoration: InputDecoration(labelText: 'No. Form'),
-                      validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
-                    ),
-                    DropdownButtonFormField<DocumentReference>(
-                      decoration: InputDecoration(labelText: 'Supplier'),
-                      value: _selectedSupplier,
-                      items: _suppliers.map((doc) {
-                        return DropdownMenuItem(
-                          value: doc.reference,
-                          child: Text(doc['name']),
-                        );
-                      }).toList(),
-                      onChanged: (val) => setState(() => _selectedSupplier = val),
-                      validator: (val) => val == null ? 'Wajib dipilih' : null,
-                    ),
-                    DropdownButtonFormField<DocumentReference>(
-                      decoration: InputDecoration(labelText: 'Warehouse'),
-                      value: _selectedWarehouse,
-                      items: _warehouses.map((doc) {
-                        return DropdownMenuItem(
-                          value: doc.reference,
-                          child: Text(doc['name']),
-                        );
-                      }).toList(),
-                      onChanged: (val) => setState(() => _selectedWarehouse = val),
-                      validator: (val) => val == null ? 'Wajib dipilih' : null,
-                    ),
-                    SizedBox(height: 24),
-                    Text('Detail Produk', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ..._details.asMap().entries.map((entry) {
-                      final i = entry.key;
-                      final item = entry.value;
-
-                      return Card(
-                        margin: EdgeInsets.symmetric(vertical: 8),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            children: [
-                              DropdownButtonFormField<DocumentReference>(
-                                value: item.productRef,
-                                items: _products.map((doc) {
-                                  return DropdownMenuItem(
-                                    value: doc.reference,
-                                    child: Text(doc['name']),
-                                  );
-                                }).toList(),
-                                onChanged: (value) => setState(() {
-                                  item.productRef = value;
-                                  item.unitName = value!.id == '1' ? 'pcs' : 'dus';
-                                }),
-                                decoration: InputDecoration(labelText: "Produk"),
-                                validator: (value) => value == null ? 'Pilih produk' : null,
-                              ),
-                              TextFormField(
-                                initialValue: item.price.toString(),
-                                decoration: InputDecoration(labelText: "Harga"),
-                                keyboardType: TextInputType.number,
-                                onChanged: (val) =>
-                                    setState(() => item.price = int.tryParse(val) ?? 0),
-                                validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
-                              ),
-                              TextFormField(
-                                initialValue: item.qty.toString(),
-                                decoration: InputDecoration(labelText: "Jumlah"),
-                                keyboardType: TextInputType.number,
-                                onChanged: (val) =>
-                                    setState(() => item.qty = int.tryParse(val) ?? 1),
-                                validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
-                              ),
-                              SizedBox(height: 8),
-                              Text("Satuan: ${item.unitName}"),
-                              Text("Subtotal: ${item.subtotal}"),
-                              TextButton.icon(
-                                onPressed: () => _removeDetail(i),
-                                icon: Icon(Icons.delete, color: Colors.red),
-                                label: Text("Hapus"),
-                              ),
-                            ],
+                    // KIRI
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextFormField(
+                            controller: _formNumberController,
+                            decoration: InputDecoration(labelText: 'No. Form'),
+                            validator: (val) =>
+                                val == null || val.isEmpty ? 'Wajib diisi' : null,
                           ),
-                        ),
-                      );
-                    }).toList(),
-                    ElevatedButton.icon(
-                      onPressed: _addDetail,
-                      icon: Icon(Icons.add),
-                      label: Text('Tambah Produk'),
+                          SizedBox(height: 16),
+                          DropdownButtonFormField<DocumentReference>(
+                            decoration: InputDecoration(labelText: 'Supplier'),
+                            value: _selectedSupplier,
+                            items: _suppliers.map((doc) {
+                              return DropdownMenuItem(
+                                value: doc.reference,
+                                child: Text(doc['name']),
+                              );
+                            }).toList(),
+                            onChanged: (val) =>
+                                setState(() => _selectedSupplier = val),
+                            validator: (val) =>
+                                val == null ? 'Wajib dipilih' : null,
+                          ),
+                          SizedBox(height: 16),
+                          DropdownButtonFormField<DocumentReference>(
+                            decoration: InputDecoration(labelText: 'Warehouse'),
+                            value: _selectedWarehouse,
+                            items: _warehouses.map((doc) {
+                              return DropdownMenuItem(
+                                value: doc.reference,
+                                child: Text(doc['name']),
+                              );
+                            }).toList(),
+                            onChanged: (val) =>
+                                setState(() => _selectedWarehouse = val),
+                            validator: (val) =>
+                                val == null ? 'Wajib dipilih' : null,
+                          ),
+                        ],
+                      ),
                     ),
-                    SizedBox(height: 16),
-                    Text("Item Total: $itemTotal"),
-                    Text("Grand Total: $grandTotal"),
-                    SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: _updateReceipt,
-                      child: Text("Update Receipt"),
+                    SizedBox(width: 24),
+                    // KANAN
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Detail Produk',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          SizedBox(height: 8),
+                          ..._details.asMap().entries.map((entry) {
+                            final i = entry.key;
+                            final item = entry.value;
+
+                            return Card(
+                              margin: EdgeInsets.symmetric(vertical: 8),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  children: [
+                                    DropdownButtonFormField<DocumentReference>(
+                                      value: item.productRef,
+                                      items: _products.map((doc) {
+                                        return DropdownMenuItem(
+                                          value: doc.reference,
+                                          child: Text(doc['name']),
+                                        );
+                                      }).toList(),
+                                      onChanged: (value) => setState(() {
+                                        item.productRef = value;
+                                        item.unitName = value!.id == '1'
+                                            ? 'pcs'
+                                            : 'dus';
+                                      }),
+                                      decoration:
+                                          InputDecoration(labelText: "Produk"),
+                                      validator: (value) =>
+                                          value == null ? 'Pilih produk' : null,
+                                    ),
+                                    TextFormField(
+                                      initialValue: item.price.toString(),
+                                      decoration:
+                                          InputDecoration(labelText: "Harga"),
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (val) => setState(() =>
+                                          item.price = int.tryParse(val) ?? 0),
+                                      validator: (val) => val == null ||
+                                              val.isEmpty
+                                          ? 'Wajib diisi'
+                                          : null,
+                                    ),
+                                    TextFormField(
+                                      initialValue: item.qty.toString(),
+                                      decoration:
+                                          InputDecoration(labelText: "Jumlah"),
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (val) => setState(() =>
+                                          item.qty = int.tryParse(val) ?? 1),
+                                      validator: (val) => val == null ||
+                                              val.isEmpty
+                                          ? 'Wajib diisi'
+                                          : null,
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text("Satuan: ${item.unitName}"),
+                                    Text("Subtotal: ${item.subtotal}"),
+                                    TextButton.icon(
+                                      onPressed: () => _removeDetail(i),
+                                      icon: Icon(Icons.delete, color: Colors.red),
+                                      label: Text("Hapus"),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          ElevatedButton.icon(
+                            onPressed: _addDetail,
+                            icon: Icon(Icons.add),
+                            label: Text('Tambah Produk'),
+                          ),
+                          SizedBox(height: 16),
+                          Text("Item Total: $itemTotal"),
+                          Text("Grand Total: $grandTotal"),
+                          SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed: _updateReceipt,
+                            child: Text("Update Receipt"),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
