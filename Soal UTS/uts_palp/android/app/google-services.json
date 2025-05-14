@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "557741350435",
+    "firebase_url": "https://uts-palp-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "uts-palp",
+    "storage_bucket": "uts-palp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:557741350435:android:f24fe121b9b5984e33db96",
+        "android_client_info": {
+          "package_name": "com.example.palp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIQSBO-AtV4YGE3lEPTq3_ZN2DmM4M9a0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

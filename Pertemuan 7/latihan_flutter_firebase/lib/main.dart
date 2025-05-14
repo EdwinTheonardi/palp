@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'add_note_page.dart';
+import 'edit_note_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -93,6 +94,16 @@ class NotesPage extends StatelessWidget {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        icon: Icon(Icons.edit, color: Colors.red),
+                        tooltip: "Edit Catatan",
+                        onPressed: () {
+                        Navigator.push(
+                          context, 
+                          MaterialPageRoute(builder: (context) => EditNotePage())
+                        );
+                      },
+                      ),
                       IconButton(
                         icon: Icon(Icons.delete, color: Colors.red),
                         tooltip: "Hapus Catatan",
