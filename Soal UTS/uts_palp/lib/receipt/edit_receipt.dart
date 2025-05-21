@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/store_service.dart';
 
 class EditReceiptPage extends StatefulWidget {
   final DocumentReference receiptRef;
@@ -31,40 +32,67 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
   }
 
   Future<void> _loadData() async {
-    final receiptSnap = await widget.receiptRef.get();
-    if (!receiptSnap.exists) return;
+    try {
+      final receiptSnap = await widget.receiptRef.get();
+      if (!receiptSnap.exists) return;
 
-    final receiptData = receiptSnap.data() as Map<String, dynamic>;
+      final receiptData = receiptSnap.data() as Map<String, dynamic>;
 
-    final supplierSnap = await FirebaseFirestore.instance.collection('suppliers').get();
-    final warehouseSnap = await FirebaseFirestore.instance.collection('warehouses').get();
-    final productSnap = await FirebaseFirestore.instance.collection('products').get();
+      final storeCode = await StoreService.getStoreCode();
+      if (storeCode == null) return;
 
-    final detailsSnap = await widget.receiptRef.collection('details').get();
+      final storeQuery = await FirebaseFirestore.instance
+          .collection('stores')
+          .where('code', isEqualTo: storeCode)
+          .limit(1)
+          .get();
 
-    setState(() {
-      _formNumberController.text = receiptData['no_form'] ?? '';
-      _selectedSupplier = receiptData['supplier_ref'];
-      _selectedWarehouse = receiptData['warehouse_ref'];
-      _suppliers = supplierSnap.docs;
-      _warehouses = warehouseSnap.docs;
-      _products = productSnap.docs;
+      if (storeQuery.docs.isEmpty) return;
+      final storeRef = storeQuery.docs.first.reference;
 
-      _details.clear();
-      for (var doc in detailsSnap.docs) {
-        final data = doc.data();
-        _details.add(_DetailItem(
-          products: _products,
-          productRef: data['product_ref'],
-          price: data['price'],
-          qty: data['qty'],
-          unitName: data['unit_name'],
-          docId: doc.id,
-        ));
-      }
+      final supplierSnap = await FirebaseFirestore.instance
+          .collection('suppliers')
+          .where('store_ref', isEqualTo: storeRef)
+          .get();
 
-      _loading = false;
-    });
+      final warehouseSnap = await FirebaseFirestore.instance
+          .collection('warehouses')
+          .where('store_ref', isEqualTo: storeRef)
+          .get();
+
+      final productSnap = await FirebaseFirestore.instance
+          .collection('products')
+          .where('store_ref', isEqualTo: storeRef)
+          .get();
+
+      final detailsSnap = await widget.receiptRef.collection('details').get();
+
+      setState(() {
+        _formNumberController.text = receiptData['no_form'] ?? '';
+        _selectedSupplier = receiptData['supplier_ref'];
+        _selectedWarehouse = receiptData['warehouse_ref'];
+        _suppliers = supplierSnap.docs;
+        _warehouses = warehouseSnap.docs;
+        _products = productSnap.docs;
+
+        _details.clear();
+        for (var doc in detailsSnap.docs) {
+          final data = doc.data();
+          _details.add(_DetailItem(
+            products: _products,
+            productRef: data['product_ref'],
+            price: data['price'],
+            qty: data['qty'],
+            unitName: data['unit_name'],
+            docId: doc.id,
+          ));
+        }
+
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading receipt data: $e');
+    }
   }
 
   int get itemTotal => _details.fold(0, (sum, item) => sum + item.qty);
