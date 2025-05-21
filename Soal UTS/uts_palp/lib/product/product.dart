@@ -96,15 +96,25 @@ class _ProductPageState extends State<ProductPage> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(
-                                    child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        '${product['name'] ?? '-'}',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${product['name'] ?? '-'}',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          'Stok: ${product['stock'] ?? '-'}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[700],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   Row(
@@ -131,7 +141,7 @@ class _ProductPageState extends State<ProductPage> {
                                           _showDeleteConfirmationDialog(
                                             context,
                                             _allProducts[index].reference,
-                                          );                          
+                                          );
                                         },
                                       ),
                                     ],

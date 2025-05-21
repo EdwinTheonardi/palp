@@ -107,6 +107,18 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
 
     for (final detail in _details) {
       await receiptDoc.collection('details').add(detail.toMap());
+
+      if (detail.productRef != null) {
+        final productSnapshot = await detail.productRef!.get();
+        final productData = productSnapshot.data() as Map<String, dynamic>?;
+
+        if (productData != null) {
+          final currentStock = productData['stock'] ?? 0;
+          final updatedStock = currentStock + detail.qty;
+
+          await detail.productRef!.update({'stock': updatedStock});
+        }
+      }
     }
 
     if (mounted) Navigator.pop(context);
@@ -202,7 +214,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                                       }).toList(),
                                       onChanged: (value) => setState(() {
                                         item.productRef = value;
-                                        item.unitName = value!.id == '1' ? 'pcs' : 'dus';
+                                        item.unitName = 'pcs';
                                       }),
                                       decoration: InputDecoration(labelText: "Produk"),
                                       validator: (value) => value == null ? 'Pilih produk' : null,
