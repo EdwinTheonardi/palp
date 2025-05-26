@@ -6,6 +6,7 @@ import 'receipt/receipt.dart';
 import 'supplier/supplier.dart';
 import 'warehouse/warehouse.dart';
 import 'product/product.dart';
+import 'shipment/shipment.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +48,7 @@ class _NavigationHomePageState extends State<NavigationHomePage> {
 
   final List<Widget> _pages = [
     ReceiptPage(),   // Halaman daftar penerimaan
+    ShipmentPage(),  // Halaman daftar pengiriman
     SupplierPage(),      // Halaman supplier
     WarehousePage(),     // Halaman warehouse
     ProductPage(),       // Halaman product
@@ -70,6 +72,10 @@ class _NavigationHomePageState extends State<NavigationHomePage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.receipt),
             label: 'Receipts',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.local_shipping),
+            label: 'Shipment',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.people),

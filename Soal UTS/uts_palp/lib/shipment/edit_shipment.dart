@@ -2,23 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/store_service.dart';
 
-class EditReceiptPage extends StatefulWidget {
-  final DocumentReference receiptRef;
+class EditShipmentPage extends StatefulWidget {
+  final DocumentReference shipmentRef;
 
-  const EditReceiptPage({super.key, required this.receiptRef});
+  const EditShipmentPage({super.key, required this.shipmentRef});
 
   @override
-  State<EditReceiptPage> createState() => _EditReceiptPageState();
+  State<EditShipmentPage> createState() => _EditShipmentPageState();
 }
 
-class _EditReceiptPageState extends State<EditReceiptPage> {
+class _EditShipmentPageState extends State<EditShipmentPage> {
   final _formKey = GlobalKey<FormState>();
   final _formNumberController = TextEditingController();
+  final _formReceiverNameController = TextEditingController();
+  final _formPostDateController = TextEditingController();
 
-  DocumentReference? _selectedSupplier;
-  DocumentReference? _selectedWarehouse;
-  List<DocumentSnapshot> _suppliers = [];
-  List<DocumentSnapshot> _warehouses = [];
   List<DocumentSnapshot> _products = [];
 
   final List<_DetailItem> _details = [];
@@ -33,10 +31,10 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
 
   Future<void> _loadData() async {
     try {
-      final receiptSnap = await widget.receiptRef.get();
-      if (!receiptSnap.exists) return;
+      final shipmentSnap = await widget.shipmentRef.get();
+      if (!shipmentSnap.exists) return;
 
-      final receiptData = receiptSnap.data() as Map<String, dynamic>;
+      final shipmentData = shipmentSnap.data() as Map<String, dynamic>;
 
       final storeCode = await StoreService.getStoreCode();
       if (storeCode == null) return;
@@ -50,29 +48,17 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
       if (storeQuery.docs.isEmpty) return;
       final storeRef = storeQuery.docs.first.reference;
 
-      final supplierSnap = await FirebaseFirestore.instance
-          .collection('suppliers')
-          .where('store_ref', isEqualTo: storeRef)
-          .get();
-
-      final warehouseSnap = await FirebaseFirestore.instance
-          .collection('warehouses')
-          .where('store_ref', isEqualTo: storeRef)
-          .get();
-
       final productSnap = await FirebaseFirestore.instance
           .collection('products')
           .where('store_ref', isEqualTo: storeRef)
           .get();
 
-      final detailsSnap = await widget.receiptRef.collection('details').get();
+      final detailsSnap = await widget.shipmentRef.collection('details').get();
 
       setState(() {
-        _formNumberController.text = receiptData['no_form'] ?? '';
-        _selectedSupplier = receiptData['supplier_ref'];
-        _selectedWarehouse = receiptData['warehouse_ref'];
-        _suppliers = supplierSnap.docs;
-        _warehouses = warehouseSnap.docs;
+        _formNumberController.text = shipmentData['no_form'] ?? '';
+        _formReceiverNameController.text = shipmentData['receiver_name'] ?? '';
+        _formPostDateController.text = shipmentData['post_date'] ?? '';
         _products = productSnap.docs;
 
         _details.clear();
@@ -81,7 +67,6 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
           _details.add(_DetailItem(
             products: _products,
             productRef: data['product_ref'],
-            price: data['price'],
             qty: data['qty'],
             unitName: data['unit_name'],
             docId: doc.id,
@@ -96,17 +81,14 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
   }
 
   int get itemTotal => _details.fold(0, (sum, item) => sum + item.qty);
-  int get grandTotal => _details.fold(0, (sum, item) => sum + item.subtotal);
 
-  Future<void> _updateReceipt() async {
+  Future<void> _updateShipment() async {
     if (!_formKey.currentState!.validate() ||
-        _selectedSupplier == null ||
-        _selectedWarehouse == null ||
         _details.isEmpty) {
       return;
     }
 
-    final detailCollection = widget.receiptRef.collection('details');
+    final detailCollection = widget.shipmentRef.collection('details');
 
     final oldDetails = await detailCollection.get();
     for (var doc in oldDetails.docs) {
@@ -120,7 +102,7 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
 
         final currentStock = productSnap.get('stock') ?? 0;
         transaction.update(productRef, {
-          'stock': currentStock - qty,
+          'stock': currentStock + qty,
         });
       });
 
@@ -129,14 +111,13 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
 
     final updatedData = {
       'no_form': _formNumberController.text.trim(),
-      'grandtotal': grandTotal,
+      'receiver_name': _formReceiverNameController.text.trim(),
+      'post_date': _formPostDateController.text.trim(),
       'item_total': itemTotal,
-      'supplier_ref': _selectedSupplier,
-      'warehouse_ref': _selectedWarehouse,
       'updated_at': DateTime.now(),
     };
 
-    await widget.receiptRef.update(updatedData);
+    await widget.shipmentRef.update(updatedData);
 
     for (final detail in _details) {
       await detailCollection.add(detail.toMap());
@@ -148,7 +129,7 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
 
           final currentStock = productSnap.get('stock') ?? 0;
           transaction.update(detail.productRef!, {
-            'stock': currentStock + detail.qty,
+            'stock': currentStock - detail.qty,
           });
         });
       }
@@ -156,7 +137,6 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
 
     if (mounted) Navigator.pop(context);
   }
-
 
   void _addDetail() {
     setState(() {
@@ -173,7 +153,7 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Edit Penerimaan')),
+      appBar: AppBar(title: Text('Edit Pengiriman')),
       body: _loading
           ? Center(child: CircularProgressIndicator())
           : Padding(
@@ -196,34 +176,18 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
                                 val == null || val.isEmpty ? 'Wajib diisi' : null,
                           ),
                           SizedBox(height: 16),
-                          DropdownButtonFormField<DocumentReference>(
-                            decoration: InputDecoration(labelText: 'Supplier'),
-                            value: _selectedSupplier,
-                            items: _suppliers.map((doc) {
-                              return DropdownMenuItem(
-                                value: doc.reference,
-                                child: Text(doc['name']),
-                              );
-                            }).toList(),
-                            onChanged: (val) =>
-                                setState(() => _selectedSupplier = val),
+                          TextFormField(
+                            controller: _formReceiverNameController,
+                            decoration: InputDecoration(labelText: 'Nama Penerima'),
                             validator: (val) =>
-                                val == null ? 'Wajib dipilih' : null,
+                                val == null || val.isEmpty ? 'Wajib diisi' : null,
                           ),
                           SizedBox(height: 16),
-                          DropdownButtonFormField<DocumentReference>(
-                            decoration: InputDecoration(labelText: 'Warehouse'),
-                            value: _selectedWarehouse,
-                            items: _warehouses.map((doc) {
-                              return DropdownMenuItem(
-                                value: doc.reference,
-                                child: Text(doc['name']),
-                              );
-                            }).toList(),
-                            onChanged: (val) =>
-                                setState(() => _selectedWarehouse = val),
+                          TextFormField(
+                            controller: _formPostDateController,
+                            decoration: InputDecoration(labelText: 'Tanggal'),
                             validator: (val) =>
-                                val == null ? 'Wajib dipilih' : null,
+                                val == null || val.isEmpty ? 'Wajib diisi' : null,
                           ),
                         ],
                       ),
@@ -266,18 +230,6 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
                                           value == null ? 'Pilih produk' : null,
                                     ),
                                     TextFormField(
-                                      initialValue: item.price.toString(),
-                                      decoration:
-                                          InputDecoration(labelText: "Harga"),
-                                      keyboardType: TextInputType.number,
-                                      onChanged: (val) => setState(() =>
-                                          item.price = int.tryParse(val) ?? 0),
-                                      validator: (val) => val == null ||
-                                              val.isEmpty
-                                          ? 'Wajib diisi'
-                                          : null,
-                                    ),
-                                    TextFormField(
                                       initialValue: item.qty.toString(),
                                       decoration:
                                           InputDecoration(labelText: "Jumlah"),
@@ -291,7 +243,6 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
                                     ),
                                     SizedBox(height: 8),
                                     Text("Satuan: ${item.unitName}"),
-                                    Text("Subtotal: ${item.subtotal}"),
                                     TextButton.icon(
                                       onPressed: () => _removeDetail(i),
                                       icon: Icon(Icons.delete, color: Colors.red),
@@ -309,11 +260,10 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
                           ),
                           SizedBox(height: 16),
                           Text("Item Total: $itemTotal"),
-                          Text("Grand Total: $grandTotal"),
                           SizedBox(height: 24),
                           ElevatedButton(
-                            onPressed: _updateReceipt,
-                            child: Text("Update Receipt"),
+                            onPressed: _updateShipment,
+                            child: Text("Update Shipment"),
                           ),
                         ],
                       ),
@@ -328,7 +278,6 @@ class _EditReceiptPageState extends State<EditReceiptPage> {
 
 class _DetailItem {
   DocumentReference? productRef;
-  int price;
   int qty;
   String unitName;
   String? docId;
@@ -337,21 +286,16 @@ class _DetailItem {
   _DetailItem({
     required this.products,
     this.productRef,
-    this.price = 0,
     this.qty = 1,
     this.unitName = 'unit',
     this.docId,
   });
 
-  int get subtotal => price * qty;
-
   Map<String, dynamic> toMap() {
     return {
       'product_ref': productRef,
-      'price': price,
       'qty': qty,
       'unit_name': unitName,
-      'subtotal': subtotal,
     };
   }
 }

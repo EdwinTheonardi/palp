@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/store_service.dart';
-import 'add_receipt.dart';
-import 'edit_receipt.dart';
+import 'add_shipment.dart';
+import 'edit_shipment.dart';
 
-class ReceiptPage extends StatefulWidget {
-  const ReceiptPage({ super.key });
+class ShipmentPage extends StatefulWidget {
+  const ShipmentPage({ super.key });
 
   @override
-  State<ReceiptPage> createState() => _ReceiptPageState();
+  State<ShipmentPage> createState() => _ShipmentPageState();
 }
 
-class _ReceiptPageState extends State<ReceiptPage> {
+class _ShipmentPageState extends State<ShipmentPage> {
   DocumentReference? _storeRef;
-  List<DocumentSnapshot> _allReceipts = [];
+  List<DocumentSnapshot> _allShipments = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadReceiptsForStore();
+    _loadShipmentsForStore();
   }
 
-  Future<void> _loadReceiptsForStore() async {
+  Future<void> _loadShipmentsForStore() async {
     final storeCode = await StoreService.getStoreCode();
 
     if (storeCode == null || storeCode.isEmpty) {
@@ -49,14 +49,14 @@ class _ReceiptPageState extends State<ReceiptPage> {
 
       print("Store reference ditemukan: ${storeRef.path}");
 
-      final receiptsSnapshot = await FirebaseFirestore.instance
-          .collection('purchaseGoodsReceipts')
+      final shipmentsSnapshot = await FirebaseFirestore.instance
+          .collection('salesGoodsShipment')
           .where('store_ref', isEqualTo: storeRef)
           .get();
 
       setState(() {
         _storeRef = storeRef;
-        _allReceipts = receiptsSnapshot.docs;
+        _allShipments = shipmentsSnapshot.docs;
         _loading = false;
       });
     } catch (e) {
@@ -69,20 +69,20 @@ class _ReceiptPageState extends State<ReceiptPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Daftar Penerimaan Barang'),
+        title: Text('Daftar Pengiriman Barang'),
       ),
       body: Stack(
         children: [
           _loading
               ? Center(child: CircularProgressIndicator())
-              : _allReceipts.isEmpty
-                  ? Center(child: Text('Tidak ada data penerimaan'))
+              : _allShipments.isEmpty
+                  ? Center(child: Text('Tidak ada data pengiriman'))
                   : RefreshIndicator(
-                      onRefresh: _loadReceiptsForStore,
+                      onRefresh: _loadShipmentsForStore,
                       child: ListView.builder(
-                        itemCount: _allReceipts.length,
+                        itemCount: _allShipments.length,
                         itemBuilder: (context, index) {
-                          final receipt = _allReceipts[index].data() as Map<String, dynamic>;
+                          final shipment = _allShipments[index].data() as Map<String, dynamic>;
 
                           return Card(
                             margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -104,7 +104,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
                                         child: Padding(
                                           padding: const EdgeInsets.only(bottom: 8.0),
                                           child: Text(
-                                            'No Form: ${receipt['no_form'] ?? '-'}',
+                                            'No Form: ${shipment['no_form'] ?? '-'}',
                                             style: TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold,
@@ -118,28 +118,28 @@ class _ReceiptPageState extends State<ReceiptPage> {
                                           children: [
                                             IconButton(
                                               icon: Icon(Icons.edit, color: Colors.lightBlue),
-                                              tooltip: "Edit Receipt",
+                                              tooltip: "Edit Shipment",
                                               onPressed: () async {
                                                 final updated = await Navigator.push(
                                                   context,
                                                   MaterialPageRoute(
-                                                    builder: (context) => EditReceiptPage(
-                                                      receiptRef: _allReceipts[index].reference,
+                                                    builder: (context) => EditShipmentPage(
+                                                      shipmentRef: _allShipments[index].reference,
                                                     ),
                                                   ),
                                                 );
-                                                await _loadReceiptsForStore(); // Refresh list setelah kembali
+                                                await _loadShipmentsForStore(); // Refresh list setelah kembali
                                               },
                                             ),
                                             IconButton(
                                               icon: Icon(Icons.delete, color: Colors.lightBlue),
-                                              tooltip: "Hapus Receipt",
+                                              tooltip: "Hapus Shipment",
                                               onPressed: () async {
                                                 _showDeleteConfirmationDialog(
                                                   context,
-                                                  _allReceipts[index].reference,
+                                                  _allShipments[index].reference,
                                                 );                          
-                                                await _loadReceiptsForStore(); 
+                                                await _loadShipmentsForStore(); 
                                               },
                                             ),
                                           ],
@@ -154,19 +154,15 @@ class _ReceiptPageState extends State<ReceiptPage> {
                                       Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text('Created At: ${receipt['created_at']?.toDate() ?? '-'}'),
-                                          Text('Post Date: ${receipt['post_date'] ?? '-'}'),
-                                          Text('Grand Total: ${receipt['grandtotal'] ?? '-'}'),
-                                          Text('Item Total: ${receipt['item_total'] ?? '-'}'),
+                                          Text('Nama Penerima: ${shipment['receiver_name'] ?? '-'}'),
+                                          Text('Item Total: ${shipment['item_total'] ?? '-'}'),
                                         ],
                                       ),
                                       Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text('Synced: ${receipt['synced'] != null ? receipt['synced'].toString() : '-'}'),
-                                          Text('Store Ref: ${receipt['store_ref']?.path ?? '-'}'),
-                                          Text('Supplier Ref: ${receipt['supplier_ref']?.path ?? '-'}'),
-                                          Text('Warehouse Ref: ${receipt['warehouse_ref']?.path ?? '-'}'),
+                                          Text('Created At: ${shipment['created_at']?.toDate() ?? '-'}'),
+                                          Text('Post Date: ${shipment['post_date'] ?? '-'}'),
                                         ],
                                       ),
                                     ],
@@ -183,12 +179,12 @@ class _ReceiptPageState extends State<ReceiptPage> {
                                               await Navigator.push(
                                                 context,
                                                 MaterialPageRoute(
-                                                  builder: (context) => ReceiptDetailsPage(
-                                                    receiptRef: _allReceipts[index].reference,
+                                                  builder: (context) => ShipmentDetailsPage(
+                                                    shipmentRef: _allShipments[index].reference,
                                                   ),
                                                 ),
                                               );
-                                              await _loadReceiptsForStore();
+                                              await _loadShipmentsForStore();
                                             },
                                             child: Text("Lihat Detail"),
                                           ),
@@ -214,11 +210,11 @@ class _ReceiptPageState extends State<ReceiptPage> {
                 onPressed: () async {
                   await Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => AddReceiptPage()),
+                    MaterialPageRoute(builder: (_) => AddShipmentPage()),
                   );
-                  await _loadReceiptsForStore(); // Refresh data setelah tambah
+                  await _loadShipmentsForStore(); // Refresh data setelah tambah
                 },
-                child: Text('Tambah Receipt'),
+                child: Text('Tambah Shipment'),
               ),
             ),
           ),
@@ -232,7 +228,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Konfirmasi'),
-        content: Text('Yakin ingin menghapus receipt ini?'),
+        content: Text('Yakin ingin menghapus shipment ini?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -253,21 +249,21 @@ class _ReceiptPageState extends State<ReceiptPage> {
         await doc.reference.delete();
       }
       await ref.delete();
-      await _loadReceiptsForStore();
+      await _loadShipmentsForStore();
     }
   }
 }
 
-class ReceiptDetailsPage extends StatefulWidget {
-  final DocumentReference receiptRef;
+class ShipmentDetailsPage extends StatefulWidget {
+  final DocumentReference shipmentRef;
 
-  const ReceiptDetailsPage({super.key, required this.receiptRef});
+  const ShipmentDetailsPage({super.key, required this.shipmentRef});
 
   @override
-  State<ReceiptDetailsPage> createState() => _ReceiptDetailsPageState();
+  State<ShipmentDetailsPage> createState() => _ShipmentDetailsPageState();
 }
 
-class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
+class _ShipmentDetailsPageState extends State<ShipmentDetailsPage> {
   List<DocumentSnapshot> _allDetails = [];
   bool _loading = true;
 
@@ -280,7 +276,7 @@ class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
   Future<void> _loadDetails() async {
     try {
       final detailsSnapshot =
-          await widget.receiptRef.collection('details').get();
+          await widget.shipmentRef.collection('details').get();
 
       setState(() {
         _allDetails = detailsSnapshot.docs;
@@ -295,7 +291,7 @@ class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Receipt Details')),
+      appBar: AppBar(title: const Text('Shipment Details')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _allDetails.isEmpty
@@ -314,10 +310,7 @@ class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text("Product Ref: ${data['product_ref']?.path ?? '-'}"),
-                            Text("Qty: ${data['qty'] ?? '-'}"),
-                            Text("Unit: ${data['unit_name'] ?? '-'}"),
-                            Text("Price: ${data['price'] ?? '-'}"),
-                            Text("Subtotal: ${data['subtotal'] ?? '-'}"),
+                            Text("Qty: ${data['qty'] ?? '-'} ${data['unit_name'] ?? '-'}"),
                           ],
                         ),
                       ),
