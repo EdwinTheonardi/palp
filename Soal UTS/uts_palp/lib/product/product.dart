@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/store_service.dart';
+import 'package:intl/intl.dart';
 import './add_product.dart';
 import './edit_product.dart'; 
 
@@ -68,9 +69,6 @@ class _ProductPageState extends State<ProductPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Daftar Product'),
-      ),
       body: Stack(
         children: [
           _loading
@@ -104,6 +102,14 @@ class _ProductPageState extends State<ProductPage> {
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          'Harga: ${NumberFormat.currency(locale: 'id_ID', symbol: 'Rp. ', decimalDigits: 0).format(product['price'] ?? 0)}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[700],
                                           ),
                                         ),
                                         SizedBox(height: 4),

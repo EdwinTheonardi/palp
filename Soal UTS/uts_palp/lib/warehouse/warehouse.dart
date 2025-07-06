@@ -68,9 +68,6 @@ class _WarehousePageState extends State<WarehousePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Daftar Warehouse'),
-      ),
       body: Stack(
         children: [
           _loading

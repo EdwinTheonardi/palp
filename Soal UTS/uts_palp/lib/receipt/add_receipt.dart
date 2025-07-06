@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/store_service.dart';
+import 'package:intl/intl.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 
 class AddReceiptPage extends StatefulWidget {
   const AddReceiptPage({super.key});
@@ -12,11 +14,16 @@ class AddReceiptPage extends StatefulWidget {
 class _AddReceiptPageState extends State<AddReceiptPage> {
   final _formKey = GlobalKey<FormState>();
   final _formNumberController = TextEditingController();
+  final _postDateController = TextEditingController();
+  DateTime? _postDate;
 
   DocumentReference? _selectedSupplier;
   DocumentReference? _selectedWarehouse;
+  DocumentReference? _selectedInvoice;
+  DocumentSnapshot? _selectedInvoiceDoc;
   List<DocumentSnapshot> _suppliers = [];
   List<DocumentSnapshot> _warehouses = [];
+  List<DocumentSnapshot> _invoices = [];
   List<DocumentSnapshot> _products = [];
 
   final List<_DetailItem> _details = [];
@@ -25,6 +32,9 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   void initState() {
     super.initState();
     _fetchDropdownData();
+    _setInitialNoForm();
+    _postDate = DateTime.now();
+    _updatePostDateController(); 
   }
 
   Future<void> _fetchDropdownData() async {
@@ -50,6 +60,11 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
           .collection('warehouses')
           .where('store_ref', isEqualTo: storeRef)
           .get();
+        
+      final invoiceSnap = await FirebaseFirestore.instance
+          .collection('purchaseInvoices')
+          .where('store_ref', isEqualTo: storeRef)
+          .get();
 
       final productSnap = await FirebaseFirestore.instance
           .collection('products')
@@ -59,6 +74,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
       setState(() {
         _suppliers = supplierSnap.docs;
         _warehouses = warehouseSnap.docs;
+        _invoices = invoiceSnap.docs;
         _products = productSnap.docs;
       });
     } catch (e) {
@@ -69,11 +85,64 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
   int get itemTotal => _details.fold(0, (sum, item) => sum + item.qty);
   int get grandTotal => _details.fold(0, (sum, item) => sum + item.subtotal);
 
+  void _updatePostDateController() {
+    _postDateController.text = _postDate == null
+        ? ''
+        : DateFormat('dd-MM-yyyy').format(_postDate!);
+  }
+
+  Future<void> _selectPostDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _postDate ?? now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _postDate = picked;
+        _updatePostDateController();
+      });
+    }
+  }
+
+  Future<String> generateNoForm() async {
+    final now = DateTime.now();
+    final startOfDayLocal = DateTime(now.year, now.month, now.day);
+    final endOfDayLocal = startOfDayLocal.add(Duration(days: 1));
+
+    final startOfDayUtc = startOfDayLocal.toUtc();
+    final endOfDayUtc = endOfDayLocal.toUtc();
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('purchaseGoodsReceipts')
+        .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDayUtc))
+        .where('created_at', isLessThan: Timestamp.fromDate(endOfDayUtc))
+        .get();
+        
+    final count = snapshot.docs.length;
+    final newNumber = count + 1;
+    final formattedNumber = newNumber.toString().padLeft(4, '0');
+
+    final code = 'TTB${now.year % 100}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}$formattedNumber';
+    return code;
+  }
+
+  Future<void> _setInitialNoForm() async {
+    final generatedCode = await generateNoForm();
+    setState(() {
+      _formNumberController.text = generatedCode;
+    });
+  }
+
   Future<void> _saveReceipt() async {
     if (!_formKey.currentState!.validate() ||
         _selectedSupplier == null ||
         _selectedWarehouse == null ||
-        _details.isEmpty) {
+        _details.isEmpty ||
+        _postDate == null) {
       return;
     }
 
@@ -93,11 +162,12 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
       'no_form': _formNumberController.text.trim(),
       'grandtotal': grandTotal,
       'item_total': itemTotal,
-      'post_date': DateTime.now().toIso8601String(),
-      'created_at': DateTime.now(),
+      'post_date': Timestamp.fromDate(_postDate!),
+      'created_at': Timestamp.now(),
       'store_ref': storeRef,
       'supplier_ref': _selectedSupplier,
       'warehouse_ref': _selectedWarehouse,
+      'invoice_ref': _selectedInvoice,
       'synced': true,
     };
 
@@ -117,6 +187,32 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
           final updatedStock = currentStock + detail.qty;
 
           await detail.productRef!.update({'stock': updatedStock});
+        }
+
+        final warehouseStockQuery = await FirebaseFirestore.instance
+          .collection('warehouseStocks')
+          .where('product_ref', isEqualTo: detail.productRef)
+          .where('warehouse_ref', isEqualTo: _selectedWarehouse)
+          .where('store_ref', isEqualTo: storeRef)
+          .limit(1)
+          .get();
+
+        if (warehouseStockQuery.docs.isEmpty) {
+          await FirebaseFirestore.instance.collection('warehouseStocks').add({
+            'product_ref': detail.productRef,
+            'warehouse_ref': _selectedWarehouse,
+            'store_ref': storeRef,
+            'qty': detail.qty,
+            'last_updated_at': Timestamp.now(),
+          });
+        } else {
+          final doc = warehouseStockQuery.docs.first;
+          final currentQty = (doc.data()['qty'] ?? 0) as int;
+
+          await doc.reference.update({
+            'qty': currentQty + detail.qty,
+            'last_updated_at': Timestamp.now(),
+          });
         }
       }
     }
@@ -149,7 +245,6 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // KIRI: No Form, Supplier, Warehouse
                     Expanded(
                       child: ListView(
                         shrinkWrap: true,
@@ -157,29 +252,114 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                           TextFormField(
                             controller: _formNumberController,
                             decoration: InputDecoration(labelText: 'No. Form'),
-                            validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
+                            readOnly: true,
                           ),
-                          DropdownButtonFormField<DocumentReference>(
-                            decoration: InputDecoration(labelText: 'Supplier'),
-                            items: _suppliers.map((doc) {
-                              return DropdownMenuItem(
-                                value: doc.reference,
-                                child: Text(doc['name']),
-                              );
-                            }).toList(),
-                            onChanged: (val) => setState(() => _selectedSupplier = val),
+                          DropdownSearch<DocumentSnapshot>(
+                            items: _invoices,
+                            itemAsString: (doc) => doc['no_invoice'],
+                            dropdownDecoratorProps: DropDownDecoratorProps(
+                              dropdownSearchDecoration: InputDecoration(labelText: 'Invoice'),
+                            ),
+                            selectedItem: _selectedInvoiceDoc,
+                            onChanged: (doc) async {
+                              if (doc == null) return;
+
+                              setState(() {
+                                _selectedInvoiceDoc = doc;
+                                _selectedInvoice = doc.reference;
+                                _details.clear();
+                              });
+
+                              final invoiceDetailsSnap = await doc.reference.collection('details').get();
+
+                              final newDetails = invoiceDetailsSnap.docs.map((doc) {
+                                final data = doc.data();
+                                final productRef = data['product_ref'] as DocumentReference?;
+                                final price = data['price'] ?? 0;
+                                final qty = data['qty'] ?? 1;
+                                final unitName = data['unit_name'] ?? 'unit';
+
+                                final detailItem = _DetailItem(products: _products)
+                                  ..productRef = productRef
+                                  ..price = price
+                                  ..qty = qty
+                                  ..unitName = unitName
+                                  ..priceController.text = price.toString();
+
+                                return detailItem;
+                              }).toList();
+
+                              setState(() {
+                                _details.addAll(newDetails);
+                              });
+                            },
                             validator: (val) => val == null ? 'Wajib dipilih' : null,
+                            popupProps: PopupProps.menu(
+                              showSearchBox: true,
+                              searchFieldProps: TextFieldProps(
+                                decoration: InputDecoration(
+                                  hintText: 'Cari invoice...',
+                                ),
+                              ),
+                            ),
                           ),
-                          DropdownButtonFormField<DocumentReference>(
-                            decoration: InputDecoration(labelText: 'Warehouse'),
-                            items: _warehouses.map((doc) {
-                              return DropdownMenuItem(
-                                value: doc.reference,
-                                child: Text(doc['name']),
-                              );
-                            }).toList(),
-                            onChanged: (val) => setState(() => _selectedWarehouse = val),
+                          DropdownSearch<DocumentSnapshot>(
+                            items: _suppliers,
+                            itemAsString: (doc) => doc['name'],
+                            selectedItem: _suppliers.any((doc) => doc.reference == _selectedSupplier)
+                                ? _suppliers.firstWhere((doc) => doc.reference == _selectedSupplier)
+                                : null,
+                            dropdownDecoratorProps: DropDownDecoratorProps(
+                              dropdownSearchDecoration: InputDecoration(labelText: 'Supplier'),
+                            ),
+                            onChanged: (doc) {
+                              setState(() {
+                                _selectedSupplier = doc?.reference;
+                              });
+                            },
                             validator: (val) => val == null ? 'Wajib dipilih' : null,
+                            popupProps: PopupProps.menu(
+                              showSearchBox: true,
+                              searchFieldProps: TextFieldProps(
+                                decoration: InputDecoration(hintText: 'Cari supplier...'),
+                              ),
+                            ),
+                          ),
+                          DropdownSearch<DocumentSnapshot>(
+                            items: _warehouses,
+                            itemAsString: (doc) => doc['name'],
+                            selectedItem: _warehouses.any((doc) => doc.reference == _selectedWarehouse)
+                                ? _warehouses.firstWhere((doc) => doc.reference == _selectedWarehouse)
+                                : null,
+                            dropdownDecoratorProps: DropDownDecoratorProps(
+                              dropdownSearchDecoration: InputDecoration(labelText: 'Warehouse'),
+                            ),
+                            onChanged: (doc) {
+                              setState(() {
+                                _selectedWarehouse = doc?.reference;
+                              });
+                            },
+                            validator: (val) => val == null ? 'Wajib dipilih' : null,
+                            popupProps: PopupProps.menu(
+                              showSearchBox: true,
+                              searchFieldProps: TextFieldProps(
+                                decoration: InputDecoration(hintText: 'Cari warehouse...'),
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: _selectPostDate,
+                            child: AbsorbPointer(
+                              child: TextFormField(
+                                decoration: InputDecoration(
+                                  labelText: 'Tanggal Penerimaan',
+                                  hintText: 'Pilih tanggal',
+                                  suffixIcon: Icon(Icons.calendar_today),
+                                ),
+                                validator: (val) => _postDate == null ? 'Wajib dipilih' : null,
+                                controller: _postDateController,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -204,26 +384,38 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                                 padding: const EdgeInsets.all(12),
                                 child: Column(
                                   children: [
-                                    DropdownButtonFormField<DocumentReference>(
-                                      value: item.productRef,
-                                      items: _products.map((doc) {
-                                        return DropdownMenuItem(
-                                          value: doc.reference,
-                                          child: Text(doc['name']),
-                                        );
-                                      }).toList(),
-                                      onChanged: (value) => setState(() {
-                                        item.productRef = value;
-                                        item.unitName = 'pcs';
-                                      }),
-                                      decoration: InputDecoration(labelText: "Produk"),
-                                      validator: (value) => value == null ? 'Pilih produk' : null,
+                                    DropdownSearch<DocumentReference>(
+                                      items: _products.map((doc) => doc.reference).toList(),
+                                      selectedItem: item.productRef,
+                                      itemAsString: (ref) {
+                                        final found = _products.where((doc) => doc.reference == ref);
+                                        return found.isNotEmpty ? found.first['name'] : '';
+                                      },
+                                      dropdownDecoratorProps: DropDownDecoratorProps(
+                                        dropdownSearchDecoration: InputDecoration(labelText: "Produk"),
+                                      ),
+                                      onChanged: (ref) {
+                                        setState(() {
+                                          item.productRef = ref;
+                                          item.updatePriceFromProduct();
+                                          item.unitName = 'pcs';
+                                        });
+                                      },
+                                      validator: (val) => val == null ? 'Pilih produk' : null,
+                                      popupProps: PopupProps.menu(
+                                        showSearchBox: true,
+                                        searchFieldProps: TextFieldProps(
+                                          decoration: InputDecoration(hintText: 'Cari produk...'),
+                                        ),
+                                      ),
                                     ),
                                     TextFormField(
-                                      initialValue: item.price.toString(),
+                                      controller: item.priceController,
                                       decoration: InputDecoration(labelText: "Harga"),
                                       keyboardType: TextInputType.number,
-                                      onChanged: (val) => setState(() => item.price = int.tryParse(val) ?? 0),
+                                      onChanged: (val) => setState(() {
+                                        item.price = int.tryParse(val) ?? 0;
+                                      }),
                                       validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
                                     ),
                                     TextFormField(
@@ -253,7 +445,7 @@ class _AddReceiptPageState extends State<AddReceiptPage> {
                           ),
                           SizedBox(height: 16),
                           Text("Item Total: $itemTotal"),
-                          Text("Grand Total: $grandTotal"),
+                          Text("Grand Total: ${NumberFormat.currency(locale: 'id_ID', symbol: 'Rp. ', decimalDigits: 0).format(grandTotal)}"),
                           SizedBox(height: 24),
                           ElevatedButton(
                             onPressed: _saveReceipt,
@@ -277,7 +469,18 @@ class _DetailItem {
   String unitName = 'unit';
   final List<DocumentSnapshot> products;
 
+  final TextEditingController priceController = TextEditingController();
+  final TextEditingController qtyController = TextEditingController(text: '1');
+
   _DetailItem({required this.products});
+
+  void updatePriceFromProduct() {
+    if (productRef == null) return;
+    final productDoc = products.firstWhere((doc) => doc.reference == productRef);
+    final data = productDoc.data() as Map<String, dynamic>;
+    price = data['price'] ?? 0;
+    priceController.text = price.toString(); // Update controller
+  }
 
   int get subtotal => price * qty;
 

@@ -14,6 +14,7 @@ class EditProductPage extends StatefulWidget {
 class _EditProductPageState extends State<EditProductPage> {
   final _formKey = GlobalKey<FormState>();
   final _productNameController = TextEditingController();
+  final _productPriceController = TextEditingController();
 
   bool _loading = true;
 
@@ -26,6 +27,7 @@ class _EditProductPageState extends State<EditProductPage> {
   @override
   void dispose() {
     _productNameController.dispose();
+    _productPriceController.dispose();
     super.dispose();
   }
 
@@ -38,6 +40,7 @@ class _EditProductPageState extends State<EditProductPage> {
 
       setState(() {
         _productNameController.text = productData['name'] ?? '';
+        _productPriceController.text = (productData['price'] ?? '').toString();;
 
         _loading = false;
       });
@@ -53,6 +56,7 @@ class _EditProductPageState extends State<EditProductPage> {
 
     final updatedData = {
       'name': _productNameController.text.trim(),
+      'price': int.tryParse(_productPriceController.text.trim()) ?? 0,
     };
 
     await widget.productRef.update(updatedData);
@@ -76,6 +80,17 @@ class _EditProductPageState extends State<EditProductPage> {
                       controller: _productNameController,
                       decoration: InputDecoration(labelText: 'Nama Product'),
                       validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
+                    ),
+                    SizedBox(height: 24),
+                    TextFormField(
+                      controller: _productPriceController,
+                      decoration: InputDecoration(labelText: 'Harga Product'),
+                      validator: (val) {
+                        if (val == null || val.isEmpty) return 'Wajib diisi';
+                        if (int.tryParse(val) == null) return 'Harus berupa angka';
+                        return null;
+                      },
+                      keyboardType: TextInputType.number,
                     ),
                     SizedBox(height: 24),
                     ElevatedButton(

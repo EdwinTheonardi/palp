@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/store_service.dart';
+import 'package:intl/intl.dart';
 
 class EditShipmentPage extends StatefulWidget {
   final DocumentReference shipmentRef;
@@ -15,13 +16,14 @@ class _EditShipmentPageState extends State<EditShipmentPage> {
   final _formKey = GlobalKey<FormState>();
   final _formNumberController = TextEditingController();
   final _formReceiverNameController = TextEditingController();
-  final _formPostDateController = TextEditingController();
+  final _postDateController = TextEditingController();
 
   List<DocumentSnapshot> _products = [];
 
   final List<_DetailItem> _details = [];
 
   bool _loading = true;
+  DateTime? _postDate;
 
   @override
   void initState() {
@@ -58,7 +60,8 @@ class _EditShipmentPageState extends State<EditShipmentPage> {
       setState(() {
         _formNumberController.text = shipmentData['no_form'] ?? '';
         _formReceiverNameController.text = shipmentData['receiver_name'] ?? '';
-        _formPostDateController.text = shipmentData['post_date'] ?? '';
+        _postDate = (shipmentData['post_date'] as Timestamp).toDate();
+        _postDateController.text = DateFormat('dd-MM-yyyy').format(_postDate!);
         _products = productSnap.docs;
 
         _details.clear();
@@ -76,15 +79,31 @@ class _EditShipmentPageState extends State<EditShipmentPage> {
         _loading = false;
       });
     } catch (e) {
-      debugPrint('Error loading receipt data: $e');
+      debugPrint('Error loading shipment data: $e');
+    }
+  }
+
+  Future<void> _selectPostDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _postDate ?? now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _postDate = picked;
+        _postDateController.text = DateFormat('dd-MM-yyyy').format(picked);
+      });
     }
   }
 
   int get itemTotal => _details.fold(0, (sum, item) => sum + item.qty);
 
   Future<void> _updateShipment() async {
-    if (!_formKey.currentState!.validate() ||
-        _details.isEmpty) {
+    if (!_formKey.currentState!.validate() || _details.isEmpty || _postDate == null) {
       return;
     }
 
@@ -112,7 +131,7 @@ class _EditShipmentPageState extends State<EditShipmentPage> {
     final updatedData = {
       'no_form': _formNumberController.text.trim(),
       'receiver_name': _formReceiverNameController.text.trim(),
-      'post_date': _formPostDateController.text.trim(),
+      'post_date': Timestamp.fromDate(_postDate!),
       'item_total': itemTotal,
       'updated_at': DateTime.now(),
     };
@@ -163,7 +182,6 @@ class _EditShipmentPageState extends State<EditShipmentPage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // KIRI
                     Expanded(
                       flex: 1,
                       child: Column(
@@ -172,35 +190,38 @@ class _EditShipmentPageState extends State<EditShipmentPage> {
                           TextFormField(
                             controller: _formNumberController,
                             decoration: InputDecoration(labelText: 'No. Form'),
-                            validator: (val) =>
-                                val == null || val.isEmpty ? 'Wajib diisi' : null,
+                            validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
                           ),
                           SizedBox(height: 16),
                           TextFormField(
                             controller: _formReceiverNameController,
                             decoration: InputDecoration(labelText: 'Nama Penerima'),
-                            validator: (val) =>
-                                val == null || val.isEmpty ? 'Wajib diisi' : null,
+                            validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
                           ),
                           SizedBox(height: 16),
-                          TextFormField(
-                            controller: _formPostDateController,
-                            decoration: InputDecoration(labelText: 'Tanggal'),
-                            validator: (val) =>
-                                val == null || val.isEmpty ? 'Wajib diisi' : null,
+                          GestureDetector(
+                            onTap: _selectPostDate,
+                            child: AbsorbPointer(
+                              child: TextFormField(
+                                controller: _postDateController,
+                                decoration: InputDecoration(
+                                  labelText: 'Tanggal Pengiriman',
+                                  suffixIcon: Icon(Icons.calendar_today),
+                                ),
+                                validator: (val) => val == null || val.isEmpty ? 'Wajib dipilih' : null,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
                     SizedBox(width: 24),
-                    // KANAN
                     Expanded(
                       flex: 2,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Detail Produk',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('Detail Produk', style: TextStyle(fontWeight: FontWeight.bold)),
                           SizedBox(height: 8),
                           ..._details.asMap().entries.map((entry) {
                             final i = entry.key;
@@ -224,22 +245,15 @@ class _EditShipmentPageState extends State<EditShipmentPage> {
                                         item.productRef = value;
                                         item.unitName = 'pcs';
                                       }),
-                                      decoration:
-                                          InputDecoration(labelText: "Produk"),
-                                      validator: (value) =>
-                                          value == null ? 'Pilih produk' : null,
+                                      decoration: InputDecoration(labelText: "Produk"),
+                                      validator: (value) => value == null ? 'Pilih produk' : null,
                                     ),
                                     TextFormField(
                                       initialValue: item.qty.toString(),
-                                      decoration:
-                                          InputDecoration(labelText: "Jumlah"),
+                                      decoration: InputDecoration(labelText: "Jumlah"),
                                       keyboardType: TextInputType.number,
-                                      onChanged: (val) => setState(() =>
-                                          item.qty = int.tryParse(val) ?? 1),
-                                      validator: (val) => val == null ||
-                                              val.isEmpty
-                                          ? 'Wajib diisi'
-                                          : null,
+                                      onChanged: (val) => setState(() => item.qty = int.tryParse(val) ?? 1),
+                                      validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
                                     ),
                                     SizedBox(height: 8),
                                     Text("Satuan: ${item.unitName}"),

@@ -4,35 +4,39 @@ import 'package:intl/intl.dart';
 import '../services/store_service.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 
-class AddShipmentPage extends StatefulWidget {
-  const AddShipmentPage({super.key});
+class AddInvoicePage extends StatefulWidget {
+  const AddInvoicePage({super.key});
 
   @override
-  State<AddShipmentPage> createState() => _AddShipmentPageState();
+  State<AddInvoicePage> createState() => _AddInvoicePageState();
 }
 
-class _AddShipmentPageState extends State<AddShipmentPage> {
+class _AddInvoicePageState extends State<AddInvoicePage> {
   final _formKey = GlobalKey<FormState>();
   final _formNumberController = TextEditingController();
-  final _formReceiverNameController = TextEditingController();
+  final _shippingCostController = TextEditingController();
   final _postDateController = TextEditingController();
+  final _dueDateController = TextEditingController();
+
   DateTime? _postDate;
+  DateTime? _dueDate;
+  String? _selectedPaymentType;
 
   List<DocumentSnapshot> _products = [];
-  List<DocumentSnapshot> _warehouses = [];
 
+  final List<String> _paymentType = ['Cash', 'N/15', 'N/30', 'N/60', 'N/90'];
   final List<_DetailItem> _details = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchDropdownData();
     _setInitialNoForm();
+    _fetchProducts();
     _postDate = DateTime.now();
-    _updatePostDateController();
+    _updatePostDateController(); 
   }
 
-  Future<void> _fetchDropdownData() async {
+  Future<void> _fetchProducts() async {
     try {
       final storeCode = await StoreService.getStoreCode();
       if (storeCode == null) return;
@@ -51,21 +55,13 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
           .where('store_ref', isEqualTo: storeRef)
           .get();
 
-      final warehouseSnap = await FirebaseFirestore.instance
-          .collection('warehouses')
-          .where('store_ref', isEqualTo: storeRef)
-          .get();
-
       setState(() {
         _products = productSnap.docs;
-        _warehouses = warehouseSnap.docs;
       });
     } catch (e) {
       debugPrint('Error fetching dropdown data: $e');
     }
   }
-
-  int get itemTotal => _details.fold(0, (sum, item) => sum + item.qty);
 
   void _updatePostDateController() {
     _postDateController.text = _postDate == null
@@ -94,21 +90,17 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
     final now = DateTime.now();
     final startOfDayLocal = DateTime(now.year, now.month, now.day);
     final endOfDayLocal = startOfDayLocal.add(Duration(days: 1));
-
     final startOfDayUtc = startOfDayLocal.toUtc();
     final endOfDayUtc = endOfDayLocal.toUtc();
 
     final snapshot = await FirebaseFirestore.instance
-        .collection('salesGoodsShipment')
+        .collection('purchaseInvoices')
         .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDayUtc))
         .where('created_at', isLessThan: Timestamp.fromDate(endOfDayUtc))
         .get();
 
-    final count = snapshot.docs.length;
-    final newNumber = count + 1;
-    final formattedNumber = newNumber.toString().padLeft(4, '0');
-
-    final code = 'TKB${now.year % 100}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}$formattedNumber';
+    final count = snapshot.docs.length + 1;
+    final code = 'FB${now.year % 100}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${count.toString().padLeft(4, '0')}';
     return code;
   }
 
@@ -119,8 +111,24 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
     });
   }
 
-  Future<void> _saveReceipt() async {
-    if (!_formKey.currentState!.validate() || _details.isEmpty) return;
+  void _updateDueDate() {
+    if (_postDate == null || _selectedPaymentType == null) return;
+    int days = 0;
+    switch (_selectedPaymentType) {
+      case 'N/15': days = 15; break;
+      case 'N/30': days = 30; break;
+      case 'N/60': days = 60; break;
+      case 'N/90': days = 90; break;
+    }
+    _dueDate = _postDate!.add(Duration(days: days));
+    _dueDateController.text = DateFormat('dd/MM/yyyy').format(_dueDate!);
+  }
+
+  int get itemTotal => _details.fold(0, (sum, item) => sum + item.qty);
+  int get grandTotal => _details.fold(0, (sum, item) => sum + item.subtotal) + (int.tryParse(_shippingCostController.text) ?? 0);
+
+  Future<void> _saveInvoice() async {
+    if (!_formKey.currentState!.validate() || _details.isEmpty || _postDate == null) return;
 
     final storeCode = await StoreService.getStoreCode();
     if (storeCode == null) return;
@@ -134,45 +142,30 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
     if (storeQuery.docs.isEmpty) return;
     final storeRef = storeQuery.docs.first.reference;
 
-    final shipment = {
-      'no_form': _formNumberController.text.trim(),
-      'receiver_name': _formReceiverNameController.text.trim(),
-      'item_total': itemTotal,
-      'post_date': Timestamp.fromDate(_postDate!),
+    final invoice = {
       'created_at': Timestamp.now(),
-      'store_ref': storeRef,
+      'due_date': _dueDate,
+      'grandtotal': grandTotal,
+      'no_invoice': _formNumberController.text.trim(),
+      'payment_type': _selectedPaymentType,
+      'post_date': Timestamp.fromDate(_postDate!),
+      'shipping_cost': int.tryParse(_shippingCostController.text) ?? 0,
+      'store_ref': storeRef
     };
 
-    final shipmentDoc = await FirebaseFirestore.instance
-        .collection('salesGoodsShipment')
-        .add(shipment);
+    final invoiceDoc = await FirebaseFirestore.instance
+        .collection('purchaseInvoices')
+        .add(invoice);
 
     for (final detail in _details) {
-      await shipmentDoc.collection('details').add(detail.toMap());
+      await invoiceDoc.collection('details').add(detail.toMap());
 
       if (detail.productRef != null) {
         final productSnapshot = await detail.productRef!.get();
         final productData = productSnapshot.data() as Map<String, dynamic>?;
-
         if (productData != null) {
-          final currentStock = productData['stock'] ?? 0;
-          await detail.productRef!.update({'stock': currentStock - detail.qty});
-        }
-
-        if (detail.warehouseRef != null) {
-          final wsQuery = await FirebaseFirestore.instance
-              .collection('warehouseStocks')
-              .where('product_ref', isEqualTo: detail.productRef)
-              .where('warehouse_ref', isEqualTo: detail.warehouseRef)
-              .limit(1)
-              .get();
-
-          if (wsQuery.docs.isNotEmpty) {
-            final wsDoc = wsQuery.docs.first;
-            final wsData = wsDoc.data();
-            final currentWarehouseStock = wsData['qty'] ?? 0;
-            await wsDoc.reference.update({'qty': currentWarehouseStock - detail.qty});
-          }
+          final updatedStock = (productData['stock'] ?? 0) + detail.qty;
+          await detail.productRef!.update({'stock': updatedStock});
         }
       }
     }
@@ -188,14 +181,26 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
 
   void _removeDetail(int index) {
     setState(() {
+      _details[index].dispose();
       _details.removeAt(index);
     });
   }
 
   @override
+  void dispose() {
+    _formNumberController.dispose();
+    _shippingCostController.dispose();
+    _dueDateController.dispose();
+    for (var detail in _details) {
+      detail.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Tambah Pengiriman')),
+      appBar: AppBar(title: Text('Tambah Invoice')),
       body: _products.isEmpty
           ? Center(child: CircularProgressIndicator())
           : Padding(
@@ -205,38 +210,67 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // KIRI
                     Expanded(
                       child: ListView(
                         shrinkWrap: true,
                         children: [
                           TextFormField(
                             controller: _formNumberController,
-                            decoration: InputDecoration(labelText: 'No. Form'),
                             readOnly: true,
-                          ),
-                          TextFormField(
-                            controller: _formReceiverNameController,
-                            decoration: InputDecoration(labelText: 'Nama Penerima'),
-                            validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
+                            decoration: InputDecoration(labelText: 'No. Faktur'),
                           ),
                           GestureDetector(
                             onTap: _selectPostDate,
                             child: AbsorbPointer(
                               child: TextFormField(
-                                controller: _postDateController,
                                 decoration: InputDecoration(
-                                  labelText: 'Tanggal Pengiriman',
-                                  hintText: 'Pilih tanggal',
+                                  labelText: 'Tanggal',
                                   suffixIcon: Icon(Icons.calendar_today),
                                 ),
-                                validator: (val) => _postDate == null ? 'Wajib dipilih' : null,
+                                controller: TextEditingController(
+                                  text: _postDate == null
+                                      ? ''
+                                      : DateFormat('dd-MM-yyyy').format(_postDate!),
+                                ),
+                                validator: (_) => _postDate == null ? 'Wajib dipilih' : null,
                               ),
                             ),
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            decoration: const InputDecoration(labelText: 'Tipe Pembayaran'),
+                            value: _selectedPaymentType,
+                            items: _paymentType.map((type) {
+                              return DropdownMenuItem(value: type, child: Text(type));
+                            }).toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedPaymentType = val;
+                                _updateDueDate();
+                              });
+                            },
+                            validator: (val) => val == null ? 'Pilih salah satu' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _dueDateController,
+                            readOnly: true,
+                            decoration: InputDecoration(labelText: 'Jatuh Tempo'),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _shippingCostController,
+                            decoration: InputDecoration(labelText: 'Biaya Pengiriman'),
+                            keyboardType: TextInputType.number,
                           ),
                         ],
                       ),
                     ),
-                    SizedBox(width: 32),
+
+                    const SizedBox(width: 32),
+
+                    // KANAN
                     Expanded(
                       flex: 2,
                       child: ListView(
@@ -266,6 +300,7 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
                                       onChanged: (ref) {
                                         setState(() {
                                           item.productRef = ref;
+                                          item.updatePriceFromProduct();
                                           item.unitName = 'pcs';
                                         });
                                       },
@@ -277,41 +312,25 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
                                         ),
                                       ),
                                     ),
-                                    DropdownButtonFormField<DocumentReference>(
-                                      value: item.warehouseRef,
-                                      items: _warehouses.map((doc) {
-                                        return DropdownMenuItem(
-                                          value: doc.reference,
-                                          child: Text(doc['name']),
-                                        );
-                                      }).toList(),
-                                      onChanged: (value) async {
-                                        setState(() {
-                                          item.warehouseRef = value;
-                                          item.availableStock = 0;
-                                        });
-                                        await item.fetchWarehouseStock();
-                                        setState(() {});
-                                      },
-                                      decoration: InputDecoration(labelText: "Gudang Asal"),
-                                      validator: (value) => value == null ? 'Pilih gudang' : null,
+                                    TextFormField(
+                                      controller: item.priceController,
+                                      keyboardType: TextInputType.number,
+                                      decoration: InputDecoration(labelText: 'Harga'),
+                                      onChanged: (val) =>
+                                          setState(() => item.price = int.tryParse(val) ?? 0),
+                                      validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
                                     ),
                                     TextFormField(
-                                      initialValue: item.qty.toString(),
-                                      decoration: InputDecoration(labelText: "Jumlah"),
+                                      controller: item.qtyController,
                                       keyboardType: TextInputType.number,
-                                      onChanged: (val) => setState(() => item.qty = int.tryParse(val) ?? 1),
-                                      validator: (val) {
-                                        final qty = int.tryParse(val ?? '');
-                                        if (qty == null || qty <= 0) return 'Wajib diisi dan lebih dari 0';
-                                        if (qty > item.availableStock) return 'Stok tidak mencukupi';
-                                        return null;
-                                      },
+                                      decoration: InputDecoration(labelText: 'Jumlah'),
+                                      onChanged: (val) =>
+                                          setState(() => item.qty = int.tryParse(val) ?? 1),
+                                      validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
                                     ),
-                                    SizedBox(height: 8),
-                                    if (item.productRef != null && item.warehouseRef != null)
-                                      Text('Stok tersedia di gudang: ${item.availableStock}'),
+                                    const SizedBox(height: 8),
                                     Text("Satuan: ${item.unitName}"),
+                                    Text("Subtotal: ${item.subtotal}"),
                                     TextButton.icon(
                                       onPressed: () => _removeDetail(i),
                                       icon: Icon(Icons.delete, color: Colors.red),
@@ -325,14 +344,15 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
                           ElevatedButton.icon(
                             onPressed: _addDetail,
                             icon: Icon(Icons.add),
-                            label: Text('Tambah Produk'),
+                            label: Text("Tambah Produk"),
                           ),
-                          SizedBox(height: 16),
+                          const SizedBox(height: 16),
                           Text("Item Total: $itemTotal"),
-                          SizedBox(height: 24),
+                          Text("Grand Total: ${NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(grandTotal)}"),
+                          const SizedBox(height: 24),
                           ElevatedButton(
-                            onPressed: _saveReceipt,
-                            child: Text("Simpan Shipment"),
+                            onPressed: _saveInvoice,
+                            child: Text("Simpan Receipt"),
                           ),
                         ],
                       ),
@@ -347,44 +367,40 @@ class _AddShipmentPageState extends State<AddShipmentPage> {
 
 class _DetailItem {
   DocumentReference? productRef;
-  DocumentReference? warehouseRef;
   int price = 0;
   int qty = 1;
-  int availableStock = 0;
   String unitName = 'unit';
   final List<DocumentSnapshot> products;
 
+  final TextEditingController priceController = TextEditingController();
+  final TextEditingController qtyController = TextEditingController(text: '1');
+
   _DetailItem({required this.products});
+
+  void updatePriceFromProduct() {
+    if (productRef == null) return;
+    final productDoc = products.firstWhere((doc) => doc.reference == productRef);
+    final data = productDoc.data() as Map<String, dynamic>;
+    price = data['price'] ?? 0;
+    priceController.text = price.toString();
+  }
 
   int get subtotal => price * qty;
 
-  Future<void> fetchWarehouseStock() async {
-    if (productRef == null || warehouseRef == null) {
-      availableStock = 0;
-      return;
-    }
-
-    final wsQuery = await FirebaseFirestore.instance
-        .collection('warehouseStocks')
-        .where('product_ref', isEqualTo: productRef)
-        .where('warehouse_ref', isEqualTo: warehouseRef)
-        .limit(1)
-        .get();
-
-    if (wsQuery.docs.isNotEmpty) {
-      final stock = wsQuery.docs.first['qty'] ?? 0;
-      availableStock = stock;
-    } else {
-      availableStock = 0;
-    }
-  }
-
   Map<String, dynamic> toMap() {
+    final productDoc = products.firstWhere((doc) => doc.reference == productRef);
     return {
       'product_ref': productRef,
-      'warehouse_ref': warehouseRef,
+      'product_name': productDoc['name'],
+      'price': price,
       'qty': qty,
       'unit_name': unitName,
+      'subtotal': subtotal,
     };
+  }
+
+  void dispose() {
+    priceController.dispose();
+    qtyController.dispose();
   }
 }

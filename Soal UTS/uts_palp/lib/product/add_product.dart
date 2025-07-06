@@ -12,6 +12,8 @@ class AddProductPage extends StatefulWidget {
 class _AddProductPageState extends State<AddProductPage> {
   final _formKey = GlobalKey<FormState>();
   final _productNameController = TextEditingController();
+  final _productPriceController = TextEditingController();
+  
 
   @override
   void initState() {
@@ -38,6 +40,8 @@ class _AddProductPageState extends State<AddProductPage> {
 
     final product = {
       'name': _productNameController.text.trim(),
+      'price': int.tryParse(_productPriceController.text.trim()) ?? 0,
+      'stock': 0,
       'store_ref': storeRef,
     };
 
@@ -61,6 +65,11 @@ class _AddProductPageState extends State<AddProductPage> {
               TextFormField(
                 controller: _productNameController,
                 decoration: InputDecoration(labelText: 'Nama Product'),
+                validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
+              ),
+              TextFormField(
+                controller: _productPriceController,
+                decoration: InputDecoration(labelText: 'Harga Product'),
                 validator: (val) => val == null || val.isEmpty ? 'Wajib diisi' : null,
               ),
               SizedBox(height: 24),

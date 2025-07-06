@@ -68,9 +68,6 @@ class _ShipmentPageState extends State<ShipmentPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Daftar Pengiriman Barang'),
-      ),
       body: Stack(
         children: [
           _loading
@@ -243,13 +240,51 @@ class _ShipmentPageState extends State<ShipmentPage> {
     );
 
     if (shouldDelete == true) {
-      // Hapus detail dan dokumen utama
-      final details = await ref.collection('details').get();
-      for (final doc in details.docs) {
-        await doc.reference.delete();
+      try {
+        final detailsSnapshot = await ref.collection('details').get();
+
+        for (final doc in detailsSnapshot.docs) {
+          final detailData = doc.data();
+          final productRef = detailData['product_ref'] as DocumentReference?;
+          final warehouseRef = detailData['warehouse_ref'] as DocumentReference?;
+          final qty = (detailData['qty'] ?? 0) as int;
+
+          if (productRef != null && warehouseRef != null) {
+            final stockQuery = await FirebaseFirestore.instance
+                .collection('warehouseStocks')
+                .where('product_ref', isEqualTo: productRef)
+                .where('warehouse_ref', isEqualTo: warehouseRef)
+                .limit(1)
+                .get();
+
+            final productDoc = await productRef.get();
+            if (productDoc.exists) {
+              final productData = productDoc.data() as Map<String, dynamic>;
+              final currentGlobalStock = productData['stock'] ?? 0;
+
+              await productRef.update({
+                'stock': currentGlobalStock + qty,
+              });
+            }
+
+            if (stockQuery.docs.isNotEmpty) {
+              final stockDoc = stockQuery.docs.first;
+              final currentStock = stockDoc['qty'] ?? 0;
+              await stockDoc.reference.update({
+                'qty': currentStock + qty,
+              });
+            }
+          }
+          await doc.reference.delete();
+        }
+        await ref.delete();
+        await _loadShipmentsForStore();
+      } catch (e) {
+        print('Gagal menghapus shipment: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menghapus shipment: $e')),
+        );
       }
-      await ref.delete();
-      await _loadShipmentsForStore();
     }
   }
 }
@@ -288,6 +323,18 @@ class _ShipmentDetailsPageState extends State<ShipmentDetailsPage> {
     }
   }
 
+  Future<String> _getProductName(DocumentReference? productRef) async {
+    if (productRef == null) return '-';
+    try {
+      final doc = await productRef.get();
+      final data = doc.data() as Map<String, dynamic>?;
+      return data?['name'] ?? '-';
+    } catch (e) {
+      print("Gagal mendapatkan nama product: $e");
+      return '-';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -309,7 +356,12 @@ class _ShipmentDetailsPageState extends State<ShipmentDetailsPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("Product Ref: ${data['product_ref']?.path ?? '-'}"),
+                            FutureBuilder<String>(
+                              future: _getProductName(data['product_ref']),
+                              builder: (context, snapshot) {
+                                return Text("Nama Produk: ${snapshot.data ?? '-'}");
+                              },
+                            ),
                             Text("Qty: ${data['qty'] ?? '-'} ${data['unit_name'] ?? '-'}"),
                           ],
                         ),

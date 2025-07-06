@@ -68,9 +68,6 @@ class _SupplierPageState extends State<SupplierPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Daftar Supplier'),
-      ),
       body: Stack(
         children: [
           _loading
